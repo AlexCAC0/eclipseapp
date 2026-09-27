@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Eclipse Studio - Task Workspace</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="theme-dark">
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- ==================== 1. LOGIN SCREEN ==================== -->
+  <div id="login-screen" class="screen-container login-layout active">
+    <div class="login-bg-glow"></div>
+    <div class="login-card">
+      <div class="login-brand">
+        <div class="logo-wrapper">
+          <img src="logo.png" alt="Eclipse Studio" class="brand-logo" onerror="this.style.display='none'; document.getElementById('fallback-logo').style.display='flex';">
+          <div id="fallback-logo" class="fallback-logo" style="display:none;">
+            <i data-lucide="moon" class="logo-icon"></i>
+          </div>
+        </div>
+        <h1 class="brand-title">ECLIPSE <span>STUDIO</span></h1>
+        <p class="brand-subtitle">Workspace de Gestión & Tareas</p>
+      </div>
+
+      <form id="login-form" class="login-form" autocomplete="off">
+        <div class="form-group">
+          <label for="login-username">
+            <i data-lucide="user" class="input-icon"></i> Usuario
+          </label>
+          <div class="input-box">
+            <input type="text" id="login-username" placeholder="Ingresa tu usuario..." required autocomplete="username" />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="login-password">
+            <i data-lucide="key" class="input-icon"></i> Contraseña
+          </label>
+          <div class="input-box">
+            <input type="password" id="login-password" placeholder="••••••••••••" required autocomplete="current-password" />
+            <button type="button" class="btn-toggle-pw" id="toggle-password-visibility" title="Mostrar/Ocultar contraseña">
+              <i data-lucide="eye" id="eye-icon"></i>
+            </button>
+          </div>
+        </div>
+
+        <div id="login-error" class="error-banner" style="display:none;">
+          <i data-lucide="alert-circle"></i>
+          <span id="login-error-text">Credenciales incorrectas.</span>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block btn-login" id="btn-login-submit">
+          <span>Ingresar al Workspace</span>
+          <i data-lucide="arrow-right"></i>
+        </button>
+      </form>
+
+      <div class="login-footer">
+        <div class="access-hint">
+          <i data-lucide="shield-check"></i> Acceso restringido gestionado por Moderadores.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 2. MAIN APP SCREEN ==================== -->
+  <div id="app-screen" class="screen-container app-layout" style="display: none;">
+    
+    <!-- Top Navigation Bar -->
+    <header class="top-nav">
+      <div class="nav-left">
+        <div class="brand-badge">
+          <img src="logo.png" alt="Eclipse" class="nav-logo" onerror="this.style.display='none'">
+          <span class="nav-brand-text">ECLIPSE <b>STUDIO</b></span>
+        </div>
+        <div class="nav-divider"></div>
+        <div class="workspace-badge" id="current-workspace-badge">
+          <i data-lucide="layers"></i>
+          <span id="role-badge-text">Mod Workspace</span>
+        </div>
+      </div>
+
+      <div class="nav-right">
+        <!-- Backend Status Indicator -->
+        <div class="connection-status" id="connection-status" title="Modo de almacenamiento">
+          <span class="status-dot"></span>
+          <span class="status-label" id="status-label">Online Server</span>
+        </div>
+
+        <!-- User Profile Dropdown / Actions -->
+        <div class="user-pill">
+          <div class="avatar" id="nav-user-avatar">A</div>
+          <div class="user-info-text">
+            <span class="user-display-name" id="nav-user-name">Alex</span>
+            <span class="user-role-label" id="nav-user-role">Moderador</span>
+          </div>
+          <button id="btn-logout" class="btn-icon-danger" title="Cerrar Sesión">
+            <i data-lucide="log-out"></i>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Workspace Container -->
+    <div class="workspace-body">
+      
+      <!-- ================= MODERATOR VIEW ================= -->
+      <section id="moderator-view" class="view-panel" style="display: none;">
+        
+        <!-- Header & Stats Bar -->
+        <div class="dashboard-header">
+          <div class="header-titles">
+            <div class="header-breadcrumbs">
+              <span>Eclipse Studio</span> / <span class="active">Panel de Control General</span>
+            </div>
+            <h2>Tablero de Control & Moderación</h2>
+            <p>Supervisa todas las tareas, asigna nuevas metas y gestiona el equipo de integrantes.</p>
+          </div>
+
+          <div class="header-actions">
+            <button class="btn btn-secondary" id="btn-open-users-modal">
+              <i data-lucide="users"></i>
+              <span>Gestionar Equipo</span>
+              <span class="counter-bubble" id="stat-team-count">0</span>
+            </button>
+            <button class="btn btn-primary" id="btn-open-new-task-modal">
+              <i data-lucide="plus"></i>
+              <span>Nueva Tarea</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Metrics Cards -->
+        <div class="stats-grid">
+          <div class="stat-card" data-filter="all">
+            <div class="stat-icon icon-red"><i data-lucide="check-square"></i></div>
+            <div class="stat-data">
+              <span class="stat-number" id="stat-total-tasks">0</span>
+              <span class="stat-title">Total Tareas</span>
+            </div>
+          </div>
+          <div class="stat-card" data-filter="pending">
+            <div class="stat-icon icon-amber"><i data-lucide="clock"></i></div>
+            <div class="stat-data">
+              <span class="stat-number" id="stat-pending-tasks">0</span>
+              <span class="stat-title">Pendientes</span>
+            </div>
+          </div>
+          <div class="stat-card" data-filter="completed">
+            <div class="stat-icon icon-emerald"><i data-lucide="check-circle-2"></i></div>
+            <div class="stat-data">
+              <span class="stat-number" id="stat-completed-tasks">0</span>
+              <span class="stat-title">Prontas</span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon icon-purple"><i data-lucide="activity"></i></div>
+            <div class="stat-data">
+              <span class="stat-number" id="stat-completion-rate">0%</span>
+              <span class="stat-title">Progreso Global</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Filter & Search Toolbar (Notion Style) -->
+        <div class="notion-toolbar">
+          <div class="toolbar-left">
+            <div class="search-input-wrapper">
+              <i data-lucide="search"></i>
+              <input type="text" id="mod-task-search" placeholder="Buscar por título, usuario o descripción..." />
+            </div>
+
+            <div class="filter-dropdown-wrapper">
+              <i data-lucide="user"></i>
+              <select id="mod-filter-user">
+                <option value="all">Todos los integrantes</option>
+              </select>
+            </div>
+
+            <div class="filter-dropdown-wrapper">
+              <i data-lucide="filter"></i>
+              <select id="mod-filter-status">
+                <option value="all">Todos los estados</option>
+                <option value="pending">Solo Pendientes</option>
+                <option value="completed">Solo Prontas</option>
+              </select>
+            </div>
+
+            <div class="filter-dropdown-wrapper">
+              <i data-lucide="flag"></i>
+              <select id="mod-filter-priority">
+                <option value="all">Todas las prioridades</option>
+                <option value="Alta">Alta</option>
+                <option value="Media">Media</option>
+                <option value="Baja">Baja</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="toolbar-right">
+            <div class="view-switcher">
+              <button class="view-btn active" id="btn-view-cards" title="Vista Cuadrícula / Tarjetas">
+                <i data-lucide="layout-grid"></i>
+              </button>
+              <button class="view-btn" id="btn-view-kanban" title="Vista Tablero Kanban">
+                <i data-lucide="kanban"></i>
+              </button>
+              <button class="view-btn" id="btn-view-table" title="Vista Tabla Notion">
+                <i data-lucide="table"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tasks Content Area -->
+        <div id="mod-tasks-container" class="tasks-wrapper cards-layout">
+          <!-- Populated by JS -->
+        </div>
+
+      </section>
+
+      <!-- ================= USER VIEW (INTEGRANTE) ================= -->
+      <section id="user-view" class="view-panel" style="display: none;">
+        
+        <!-- Welcome Hero Banner -->
+        <div class="user-hero-card">
+          <div class="hero-content">
+            <div class="hero-badge">
+              <i data-lucide="sparkles"></i> Mi Espacio Personal
+            </div>
+            <h2 id="user-greeting">Hola, <span id="user-display-title">Usuario</span> 👋</h2>
+            <p>Aquí tienes el listado de tareas asignadas exclusivamente a ti. Marca como <b>"Pronta"</b> cuando finalices una tarea.</p>
+            
+            <div class="user-progress-container">
+              <div class="progress-info">
+                <span>Tu Progreso</span>
+                <span id="user-progress-percent">0% completado</span>
+              </div>
+              <div class="progress-bar-bg">
+                <div class="progress-bar-fill" id="user-progress-bar" style="width: 0%;"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="hero-stats-row">
+            <div class="hero-stat">
+              <span class="num" id="user-stat-pending">0</span>
+              <span class="lbl">Pendientes</span>
+            </div>
+            <div class="hero-stat">
+              <span class="num" id="user-stat-completed">0</span>
+              <span class="lbl">Prontas</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- User Filters -->
+        <div class="notion-toolbar user-toolbar">
+          <div class="toolbar-left">
+            <div class="search-input-wrapper">
+              <i data-lucide="search"></i>
+              <input type="text" id="user-task-search" placeholder="Buscar en mis tareas..." />
+            </div>
+            
+            <div class="status-tab-group">
+              <button class="tab-btn active" data-tab="all">Todas (<span id="user-tab-count-all">0</span>)</button>
+              <button class="tab-btn" data-tab="pending">Pendientes (<span id="user-tab-count-pending">0</span>)</button>
+              <button class="tab-btn" data-tab="completed">Prontas (<span id="user-tab-count-completed">0</span>)</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- User Tasks Container -->
+        <div id="user-tasks-container" class="user-tasks-grid">
+          <!-- Populated by JS -->
+        </div>
+
+      </section>
+
+    </div>
+  </div>
+
+  <!-- ==================== MODALS ==================== -->
+
+  <!-- 1. Modal: Nueva / Editar Tarea (Solo Mod) -->
+  <div class="modal-overlay" id="task-modal" style="display:none;">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <i data-lucide="clipboard-edit" class="modal-icon"></i>
+          <h3 id="task-modal-title">Nueva Tarea</h3>
+        </div>
+        <button type="button" class="btn-close-modal" id="btn-close-task-modal">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+
+      <form id="task-form" class="modal-body">
+        <input type="hidden" id="task-form-id" value="">
+
+        <div class="form-group">
+          <label for="task-form-title">Título de la Tarea <span class="required">*</span></label>
+          <input type="text" id="task-form-title" placeholder="Ej: Diseñar banner promocional..." required />
+        </div>
+
+        <div class="form-row-2">
+          <div class="form-group">
+            <label for="task-form-assigned">Asignar a Integrante <span class="required">*</span></label>
+            <select id="task-form-assigned" required>
+              <!-- Filled with available users -->
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="task-form-priority">Prioridad</label>
+            <select id="task-form-priority">
+              <option value="Alta">🔴 Alta</option>
+              <option value="Media" selected>🟡 Media</option>
+              <option value="Baja">🟢 Baja</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row-2">
+          <div class="form-group">
+            <label for="task-form-category">Categoría / Tag</label>
+            <select id="task-form-category">
+              <option value="Diseño">🎨 Diseño</option>
+              <option value="Desarrollo">💻 Desarrollo</option>
+              <option value="Edición / Video">🎬 Edición / Video</option>
+              <option value="Audio / Música">🎧 Audio / Música</option>
+              <option value="Redes Sociales">📱 Redes Sociales</option>
+              <option value="General" selected>📌 General</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="task-form-duedate">Fecha Límite (Opcional)</label>
+            <input type="date" id="task-form-duedate" />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="task-form-desc">Descripción detallada e Instrucciones</label>
+          <textarea id="task-form-desc" rows="4" placeholder="Escribe aquí los detalles, enlaces de recursos o pasos que el integrante debe realizar..."></textarea>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="btn-cancel-task-modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary" id="btn-save-task">
+            <i data-lucide="check"></i>
+            <span>Guardar Tarea</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 2. Modal: Gestión de Integrantes / Usuarios (Solo Mod) -->
+  <div class="modal-overlay" id="users-modal" style="display:none;">
+    <div class="modal-box modal-lg">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <i data-lucide="user-cog" class="modal-icon"></i>
+          <h3>Gestión de Integrantes & Credenciales</h3>
+        </div>
+        <button type="button" class="btn-close-modal" id="btn-close-users-modal">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        
+        <!-- Crear nuevo integrante box -->
+        <div class="create-user-card">
+          <h4><i data-lucide="user-plus"></i> Dar de Alta Nuevo Integrante</h4>
+          <p class="section-hint">Crea las credenciales de acceso para que el integrante pueda ingresar al workspace.</p>
+          
+          <form id="create-user-form" class="user-inline-form">
+            <div class="form-group">
+              <label for="new-user-name">Nombre / Apodo</label>
+              <input type="text" id="new-user-name" placeholder="Ej: Marcos Pérez" required />
+            </div>
+            
+            <div class="form-group">
+              <label for="new-user-username">Usuario de Login</label>
+              <input type="text" id="new-user-username" placeholder="Ej: marcos2026" required />
+            </div>
+
+            <div class="form-group">
+              <label for="new-user-password">Contraseña</label>
+              <input type="text" id="new-user-password" placeholder="Contraseña de acceso" required />
+            </div>
+
+            <div class="form-group">
+              <label for="new-user-role">Rol</label>
+              <select id="new-user-role">
+                <option value="user" selected>Integrante (Solo sus tareas)</option>
+                <option value="moderator">Moderador (Control Total)</option>
+              </select>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-add-user">
+              <i data-lucide="plus"></i> Crear Usuario
+            </button>
+          </form>
+        </div>
+
+        <!-- Lista de integrantes existentes -->
+        <div class="users-list-section">
+          <h4><i data-lucide="users"></i> Integrantes Registrados (<span id="user-modal-count">0</span>)</h4>
+          <div class="users-table-wrap">
+            <table class="custom-table" id="table-users">
+              <thead>
+                <tr>
+                  <th>Integrante</th>
+                  <th>Usuario</th>
+                  <th>Rol</th>
+                  <th>Tareas Asignadas</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="users-table-body">
+                <!-- Populated by JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="btn-finish-users-modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. Modal: Ver Detalle Completo de Tarea -->
+  <div class="modal-overlay" id="task-detail-modal" style="display:none;">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <i data-lucide="file-text" class="modal-icon"></i>
+          <h3 id="detail-modal-title">Detalle de la Tarea</h3>
+        </div>
+        <button type="button" class="btn-close-modal" id="btn-close-detail-modal">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div class="modal-body detail-modal-body">
+        <div class="detail-header-tags">
+          <span class="tag-pill" id="detail-category-badge">General</span>
+          <span class="priority-pill" id="detail-priority-badge">Prioridad</span>
+          <span class="status-pill" id="detail-status-badge">Pendiente</span>
+        </div>
+
+        <div class="detail-info-row">
+          <div class="info-block">
+            <span class="lbl">Asignado a:</span>
+            <span class="val" id="detail-assigned-to">-</span>
+          </div>
+          <div class="info-block">
+            <span class="lbl">Fecha Límite:</span>
+            <span class="val" id="detail-due-date">Sin fecha</span>
+          </div>
+        </div>
+
+        <div class="detail-desc-box">
+          <span class="lbl">Instrucciones & Descripción:</span>
+          <div class="desc-content" id="detail-description-content">Sin descripción.</div>
+        </div>
+      </div>
+      <div class="modal-footer" id="detail-modal-footer">
+        <button type="button" class="btn btn-secondary" id="btn-close-detail-footer">Cerrar</button>
+        <button type="button" class="btn btn-primary" id="detail-btn-toggle-status">
+          <i data-lucide="check-circle-2"></i>
+          <span id="detail-btn-status-text">Marcar como Pronta</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- JavaScript application file -->
+  <script src="app.js"></script>
+</body>
+</html>
