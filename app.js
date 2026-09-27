@@ -1,49 +1,29 @@
 /**
- * Eclipse Studio APP - Core Application Logic
- * Supports both SQLite Python Server Mode & Offline LocalStorage Fallback Mode.
+ * ==============================================================================
+ * ECLIPSE STUDIO APP - Core Application Logic
+ * Integración con Firebase Realtime Database (Nube en Tiempo Real) & LocalStorage
+ * ==============================================================================
  */
 
 // ==================== DEFAULT INITIAL SEED DATA ====================
-const INITIAL_USERS = [
-  { id: 1, username: 'AlexCAC', password: 'Campeondlsiglo0', name: 'Alex (Owner)', role: 'moderator', created_at: new Date().toISOString() },
-  { id: 2, username: 'mateo_dev', password: '123', name: 'Mateo González', role: 'user', created_at: new Date().toISOString() },
-  { id: 3, username: 'sofia_design', password: '123', name: 'Sofía Romero', role: 'user', created_at: new Date().toISOString() }
-];
-
-const INITIAL_TASKS = [
-  {
-    id: 1,
-    title: 'Diseñar Identidad Visual y Banners para Redes',
-    description: 'Crear los nuevos assets visuales con paleta rojo y negro en formato 1920x1080 y 1080x1080 para las publicaciones del mes.',
-    assigned_to: 'sofia_design',
-    priority: 'Alta',
-    category: 'Diseño',
-    status: 'pending',
-    due_date: '2026-10-05',
-    created_at: new Date().toISOString(),
-    completed_at: ''
-  },
-  {
-    id: 2,
-    title: 'Configurar API y Base de Datos del Workspace',
-    description: 'Verificar la persistencia de usuarios y tareas con soporte para roles de moderador y vista privada de integrantes.',
-    assigned_to: 'mateo_dev',
-    priority: 'Media',
-    category: 'Desarrollo',
-    status: 'completed',
-    due_date: '2026-09-30',
-    created_at: new Date().toISOString(),
-    completed_at: new Date().toISOString()
-  }
-];
+const DEFAULT_INITIAL_USER = {
+  id: 'user_alex_owner',
+  username: 'AlexCAC',
+  password: 'Campeondlsiglo0',
+  name: 'Alex (Owner)',
+  role: 'moderator',
+  created_at: new Date().toISOString()
+};
 
 // ==================== STATE ====================
+let db = null;
+let useFirebase = false;
 let currentUser = null;
 let appUsers = [];
 let appTasks = [];
-let isServerOnline = false;
 let currentModView = 'cards'; // 'cards' | 'kanban' | 'table'
 let userActiveTab = 'all'; // 'all' | 'pending' | 'completed'
+let currentDetailTaskId = null;
 
 // ==================== DOM ELEMENTS ====================
 const loginScreen = document.getElementById('login-screen');
@@ -136,11 +116,10 @@ const userTabCountAll = document.getElementById('user-tab-count-all');
 const userTabCountPending = document.getElementById('user-tab-count-pending');
 const userTabCountCompleted = document.getElementById('user-tab-count-completed');
 
-let currentDetailTaskId = null;
-
 // ==================== TOAST NOTIFICATIONS ====================
 function showToast(message, type = 'info') {
   const container = document.getElementById('toast-container');
+  if (!container) return;
   const toast = document.createElement('div');
   toast.className = `toast toast-${type}`;
   
@@ -163,23 +142,58 @@ function showToast(message, type = 'info') {
   }, 3500);
 }
 
-// ==================== STORAGE & API LAYER ====================
-async function checkServerConnection() {
-  try {
-    const res = await fetch('/api/users', { cache: 'no-store' });
-    if (res.ok) {
-      isServerOnline = true;
+// ==================== DATABASE INITIALIZATION & REALTIME LISTENERS ====================
+function initDatabase() {
+  if (typeof firebase !== 'undefined' && typeof isFirebaseConfigured === 'function' && isFirebaseConfigured()) {
+    try {
+      if (!firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+      }
+      db = firebase.database();
+      useFirebase = true;
+
       connectionStatus.classList.remove('offline');
-      statusLabel.textContent = 'Servidor Online';
-      return true;
+      statusLabel.textContent = 'Firebase Cloud ⚡';
+      console.log('✅ Conectado exitosamente a Firebase Realtime Database');
+
+      // Realtime listener for users
+      db.ref('users').on('value', (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+          appUsers = Object.keys(data).map(key => ({ id: key, ...data[key] }));
+        } else {
+          // Initialize initial owner user in Firebase if empty
+          appUsers = [DEFAULT_INITIAL_USER];
+          db.ref('users/' + DEFAULT_INITIAL_USER.id).set(DEFAULT_INITIAL_USER);
+        }
+        onDataUpdated();
+      });
+
+      // Realtime listener for tasks
+      db.ref('tasks').on('value', (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+          appTasks = Object.keys(data).map(key => ({ id: key, ...data[key] }));
+          // Order by created_at descending
+          appTasks.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+        } else {
+          appTasks = [];
+        }
+        onDataUpdated();
+      });
+
+      return;
+    } catch (err) {
+      console.error('Error inicializando Firebase:', err);
     }
-  } catch (e) {
-    // offline or file:// protocol
   }
-  isServerOnline = false;
+
+  // Fallback: LocalStorage Mode
+  useFirebase = false;
   connectionStatus.classList.add('offline');
-  statusLabel.textContent = 'Local Storage';
-  return false;
+  statusLabel.textContent = 'Modo LocalStorage';
+  loadFromLocalStorage();
+  onDataUpdated();
 }
 
 function loadFromLocalStorage() {
@@ -187,7 +201,7 @@ function loadFromLocalStorage() {
   if (savedUsers) {
     appUsers = JSON.parse(savedUsers);
   } else {
-    appUsers = [...INITIAL_USERS];
+    appUsers = [DEFAULT_INITIAL_USER];
     saveUsersToLocalStorage();
   }
 
@@ -195,7 +209,7 @@ function loadFromLocalStorage() {
   if (savedTasks) {
     appTasks = JSON.parse(savedTasks);
   } else {
-    appTasks = [...INITIAL_TASKS];
+    appTasks = [];
     saveTasksToLocalStorage();
   }
 }
@@ -208,29 +222,19 @@ function saveTasksToLocalStorage() {
   localStorage.setItem('eclipse_tasks', JSON.stringify(appTasks));
 }
 
-async function loadData() {
-  const online = await checkServerConnection();
-  if (online) {
-    try {
-      const [uRes, tRes] = await Promise.all([
-        fetch('/api/users'),
-        fetch('/api/tasks')
-      ]);
-      const uData = await uRes.json();
-      const tData = await tRes.json();
-      appUsers = uData.users || [];
-      appTasks = tData.tasks || [];
-    } catch (err) {
-      console.warn('Error cargando del servidor, usando local storage fallback', err);
-      loadFromLocalStorage();
-    }
-  } else {
-    loadFromLocalStorage();
+function onDataUpdated() {
+  populateUserDropdowns();
+  if (usersModal && usersModal.style.display === 'flex') {
+    renderUsersModalTable();
   }
 
-  // Populate filter dropdowns & UI
-  populateUserDropdowns();
   if (currentUser) {
+    // Keep current user object updated
+    const refreshedUser = appUsers.find(u => u.username === currentUser.username);
+    if (refreshedUser) {
+      currentUser = refreshedUser;
+    }
+
     if (currentUser.role === 'moderator') {
       renderModeratorView();
     } else {
@@ -240,39 +244,21 @@ async function loadData() {
 }
 
 // ==================== AUTHENTICATION ====================
-async function handleLogin(e) {
+function handleLogin(e) {
   e.preventDefault();
   const username = loginUsernameInput.value.trim();
   const password = loginPasswordInput.value.trim();
 
   loginError.style.display = 'none';
 
-  if (isServerOnline) {
-    try {
-      const res = await fetch('/api/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
-      });
-      const data = await res.json();
-      if (res.ok && data.user) {
-        authenticateUser(data.user);
-        return;
-      } else {
-        showLoginError(data.message || 'Credenciales incorrectas');
-        return;
-      }
-    } catch (err) {
-      console.warn('Fallo petición login a servidor, verificando local storage', err);
-    }
-  }
+  const user = appUsers.find(u => 
+    u.username && u.username.toLowerCase() === username.toLowerCase() && u.password === password
+  );
 
-  // Fallback Local Storage Login
-  const user = appUsers.find(u => u.username.toLowerCase() === username.toLowerCase() && u.password === password);
   if (user) {
     authenticateUser(user);
   } else {
-    showLoginError('Usuario o contraseña no válidos. Contacta a un moderador.');
+    showLoginError('Usuario o contraseña incorrectos.');
   }
 }
 
@@ -290,10 +276,9 @@ function authenticateUser(user) {
   loginScreen.style.display = 'none';
   appScreen.style.display = 'flex';
 
-  // Setup navbar profile
   navUserName.textContent = user.name || user.username;
   navUserAvatar.textContent = (user.name || user.username).charAt(0).toUpperCase();
-  
+
   if (user.role === 'moderator') {
     navUserRole.textContent = 'Moderador';
     roleBadgeText.textContent = 'Mod Workspace';
@@ -321,7 +306,7 @@ function handleLogout() {
   loginScreen.classList.add('active');
   loginForm.reset();
   loginError.style.display = 'none';
-  showToast('Has cerrado sesión correctamente.', 'info');
+  showToast('Has cerrado sesión.', 'info');
 }
 
 // ==================== USER MANAGEMENT (MOD ONLY) ====================
@@ -333,36 +318,17 @@ async function handleCreateUser(e) {
   const role = document.getElementById('new-user-role').value;
 
   if (!username || !password) {
-    showToast('Usuario y contraseña requeridos', 'error');
+    showToast('Usuario y contraseña obligatorios', 'error');
     return;
   }
 
-  // Check if exists
-  const existing = appUsers.find(u => u.username.toLowerCase() === username.toLowerCase());
+  const existing = appUsers.find(u => u.username && u.username.toLowerCase() === username.toLowerCase());
   if (existing) {
     showToast('El nombre de usuario ya existe', 'error');
     return;
   }
 
-  if (isServerOnline) {
-    try {
-      const res = await fetch('/api/users', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, username, password, role })
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        showToast(data.message || 'Error al crear usuario', 'error');
-        return;
-      }
-    } catch (err) {
-      console.warn('Error creando en server', err);
-    }
-  }
-
   const newUser = {
-    id: Date.now(),
     name: name || username,
     username,
     password,
@@ -370,14 +336,19 @@ async function handleCreateUser(e) {
     created_at: new Date().toISOString()
   };
 
-  appUsers.push(newUser);
-  saveUsersToLocalStorage();
-  
+  if (useFirebase && db) {
+    const newRef = db.ref('users').push();
+    newUser.id = newRef.key;
+    await newRef.set(newUser);
+  } else {
+    newUser.id = 'usr_' + Date.now();
+    appUsers.push(newUser);
+    saveUsersToLocalStorage();
+    onDataUpdated();
+  }
+
   createUserForm.reset();
-  showToast(`Usuario ${username} creado exitosamente`, 'success');
-  populateUserDropdowns();
-  renderUsersModalTable();
-  renderModeratorView();
+  showToast(`Integrante @${username} creado en la nube`, 'success');
 }
 
 async function handleDeleteUser(userId, username) {
@@ -386,27 +357,17 @@ async function handleDeleteUser(userId, username) {
     return;
   }
 
-  if (!confirm(`¿Estás seguro de que deseas eliminar al integrante "${username}"?`)) {
-    return;
+  if (!confirm(`¿Eliminar al integrante @${username}?`)) return;
+
+  if (useFirebase && db) {
+    await db.ref('users/' + userId).remove();
+  } else {
+    appUsers = appUsers.filter(u => u.id !== userId);
+    saveUsersToLocalStorage();
+    onDataUpdated();
   }
 
-  if (isServerOnline) {
-    try {
-      await fetch('/api/users/delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: userId, username })
-      });
-    } catch (e) {}
-  }
-
-  appUsers = appUsers.filter(u => u.id !== userId);
-  saveUsersToLocalStorage();
-
-  showToast(`Integrante ${username} eliminado`, 'info');
-  populateUserDropdowns();
-  renderUsersModalTable();
-  renderModeratorView();
+  showToast(`Integrante @${username} eliminado`, 'info');
 }
 
 function renderUsersModalTable() {
@@ -438,7 +399,7 @@ function renderUsersModalTable() {
         </span>
       </td>
       <td>
-        ${isOwner ? '<span style="font-size:0.75rem; color:var(--text-muted);">Owner Protegido</span>' : `
+        ${isOwner ? '<span style="font-size:0.75rem; color:var(--text-muted);">Owner</span>' : `
           <button class="btn-icon-danger btn-delete-user" data-id="${u.id}" data-username="${escapeHtml(u.username)}" title="Eliminar Integrante">
             <i data-lucide="trash-2"></i>
           </button>
@@ -450,9 +411,7 @@ function renderUsersModalTable() {
 
   usersTableBody.querySelectorAll('.btn-delete-user').forEach(btn => {
     btn.addEventListener('click', () => {
-      const id = parseInt(btn.dataset.id);
-      const uname = btn.dataset.username;
-      handleDeleteUser(id, uname);
+      handleDeleteUser(btn.dataset.id, btn.dataset.username);
     });
   });
 
@@ -460,11 +419,8 @@ function renderUsersModalTable() {
 }
 
 function populateUserDropdowns() {
-  // Filter dropdown in mod view
   const currentFilterVal = modFilterUser.value;
   modFilterUser.innerHTML = '<option value="all">Todos los integrantes</option>';
-  
-  // Task form assigned dropdown
   taskFormAssigned.innerHTML = '';
 
   appUsers.forEach(u => {
@@ -484,10 +440,10 @@ function populateUserDropdowns() {
   }
 }
 
-// ==================== TASK ACTIONS (MOD & USER) ====================
+// ==================== TASK MANAGEMENT (REALTIME CLOUD) ====================
 async function handleSaveTask(e) {
   e.preventDefault();
-  const id = taskFormId.value ? parseInt(taskFormId.value) : null;
+  const id = taskFormId.value;
   const title = taskFormTitle.value.trim();
   const assigned_to = taskFormAssigned.value;
   const priority = taskFormPriority.value;
@@ -496,40 +452,35 @@ async function handleSaveTask(e) {
   const description = taskFormDesc.value.trim();
 
   if (!title || !assigned_to) {
-    showToast('Título y usuario asignado son obligatorios', 'error');
+    showToast('Título y asignado obligatorios', 'error');
     return;
   }
 
   if (id) {
-    // Edit existing
-    if (isServerOnline) {
-      try {
-        await fetch('/api/tasks/update', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id, title, assigned_to, priority, category, due_date, description })
-        });
-      } catch (err) {}
-    }
+    // Update existing task
+    const taskUpdates = {
+      title,
+      assigned_to,
+      priority,
+      category,
+      due_date,
+      description
+    };
 
-    const tIndex = appTasks.findIndex(t => t.id === id);
-    if (tIndex !== -1) {
-      appTasks[tIndex] = {
-        ...appTasks[tIndex],
-        title,
-        assigned_to,
-        priority,
-        category,
-        due_date,
-        description
-      };
-      saveTasksToLocalStorage();
-      showToast('Tarea actualizada correctamente', 'success');
+    if (useFirebase && db) {
+      await db.ref('tasks/' + id).update(taskUpdates);
+    } else {
+      const idx = appTasks.findIndex(t => String(t.id) === String(id));
+      if (idx !== -1) {
+        appTasks[idx] = { ...appTasks[idx], ...taskUpdates };
+        saveTasksToLocalStorage();
+        onDataUpdated();
+      }
     }
+    showToast('Tarea actualizada', 'success');
   } else {
-    // Create new
+    // Create new task
     const newTask = {
-      id: Date.now(),
       title,
       description,
       assigned_to,
@@ -541,74 +492,54 @@ async function handleSaveTask(e) {
       completed_at: ''
     };
 
-    if (isServerOnline) {
-      try {
-        const res = await fetch('/api/tasks', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, description, assigned_to, priority, category, due_date })
-        });
-        const d = await res.json();
-        if (d.task && d.task.id) {
-          newTask.id = d.task.id;
-        }
-      } catch (err) {}
+    if (useFirebase && db) {
+      const newRef = db.ref('tasks').push();
+      newTask.id = newRef.key;
+      await newRef.set(newTask);
+    } else {
+      newTask.id = 'task_' + Date.now();
+      appTasks.unshift(newTask);
+      saveTasksToLocalStorage();
+      onDataUpdated();
     }
-
-    appTasks.unshift(newTask);
-    saveTasksToLocalStorage();
     showToast(`Tarea asignada a @${assigned_to}`, 'success');
   }
 
   closeTaskModal();
-  renderModeratorView();
 }
 
 async function handleDeleteTask(taskId) {
   if (!confirm('¿Seguro que deseas eliminar esta tarea?')) return;
 
-  if (isServerOnline) {
-    try {
-      await fetch('/api/tasks/delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: taskId })
-      });
-    } catch (e) {}
-  }
-
-  appTasks = appTasks.filter(t => t.id !== taskId);
-  saveTasksToLocalStorage();
-  showToast('Tarea eliminada', 'info');
-
-  if (currentUser.role === 'moderator') {
-    renderModeratorView();
+  if (useFirebase && db) {
+    await db.ref('tasks/' + taskId).remove();
   } else {
-    renderUserView();
+    appTasks = appTasks.filter(t => String(t.id) !== String(taskId));
+    saveTasksToLocalStorage();
+    onDataUpdated();
   }
+
+  showToast('Tarea eliminada', 'info');
 }
 
 async function toggleTaskStatus(taskId) {
-  const task = appTasks.find(t => t.id === taskId);
+  const task = appTasks.find(t => String(t.id) === String(taskId));
   if (!task) return;
 
   const newStatus = task.status === 'completed' ? 'pending' : 'completed';
   const completed_at = newStatus === 'completed' ? new Date().toISOString() : '';
 
-  task.status = newStatus;
-  task.completed_at = completed_at;
-
-  if (isServerOnline) {
-    try {
-      await fetch('/api/tasks/toggle', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: taskId, status: newStatus })
-      });
-    } catch (e) {}
+  if (useFirebase && db) {
+    await db.ref('tasks/' + taskId).update({
+      status: newStatus,
+      completed_at: completed_at
+    });
+  } else {
+    task.status = newStatus;
+    task.completed_at = completed_at;
+    saveTasksToLocalStorage();
+    onDataUpdated();
   }
-
-  saveTasksToLocalStorage();
 
   if (newStatus === 'completed') {
     showToast(`🎉 ¡Tarea "${task.title}" marcada como Pronta!`, 'success');
@@ -616,15 +547,9 @@ async function toggleTaskStatus(taskId) {
     showToast(`Tarea reabierta como Pendiente`, 'info');
   }
 
-  if (currentUser.role === 'moderator') {
-    renderModeratorView();
-  } else {
-    renderUserView();
-  }
-
-  // If detail modal open, update it
   if (currentDetailTaskId === taskId) {
-    openTaskDetailModal(task);
+    const updated = { ...task, status: newStatus, completed_at };
+    openTaskDetailModal(updated);
   }
 }
 
@@ -682,7 +607,6 @@ function openTaskDetailModal(task) {
 
 // ==================== RENDER: MODERATOR VIEW ====================
 function renderModeratorView() {
-  // Update stats
   const total = appTasks.length;
   const pending = appTasks.filter(t => t.status === 'pending').length;
   const completed = appTasks.filter(t => t.status === 'completed').length;
@@ -694,7 +618,6 @@ function renderModeratorView() {
   statCompletionRate.textContent = `${rate}%`;
   statTeamCount.textContent = appUsers.length;
 
-  // Filter tasks
   const searchTerm = modTaskSearch.value.toLowerCase().trim();
   const filterUser = modFilterUser.value;
   const filterStatus = modFilterStatus.value;
@@ -703,7 +626,7 @@ function renderModeratorView() {
   const filteredTasks = appTasks.filter(t => {
     const matchSearch = t.title.toLowerCase().includes(searchTerm) ||
       (t.description && t.description.toLowerCase().includes(searchTerm)) ||
-      t.assigned_to.toLowerCase().includes(searchTerm);
+      (t.assigned_to && t.assigned_to.toLowerCase().includes(searchTerm));
 
     const matchUser = filterUser === 'all' || t.assigned_to === filterUser;
     const matchStatus = filterStatus === 'all' || t.status === filterStatus;
@@ -712,7 +635,6 @@ function renderModeratorView() {
     return matchSearch && matchUser && matchStatus && matchPriority;
   });
 
-  // Set layout class
   modTasksContainer.className = `tasks-wrapper ${currentModView}-layout`;
   modTasksContainer.innerHTML = '';
 
@@ -721,7 +643,7 @@ function renderModeratorView() {
       <div class="empty-state">
         <i data-lucide="inbox"></i>
         <h4>No se encontraron tareas</h4>
-        <p>No hay tareas que coincidan con los filtros aplicados o aún no has creado ninguna.</p>
+        <p>No hay tareas que coincidan con los filtros o aún no has creado ninguna.</p>
         <button class="btn btn-primary" onclick="openNewTaskModal()">
           <i data-lucide="plus"></i> Crear Nueva Tarea
         </button>
@@ -784,7 +706,6 @@ function renderModCardsView(tasks) {
       </div>
     `;
 
-    // Event listeners
     card.querySelector('.task-title').addEventListener('click', () => openTaskDetailModal(task));
     const descEl = card.querySelector('.task-desc-preview');
     if (descEl) descEl.addEventListener('click', () => openTaskDetailModal(task));
@@ -811,7 +732,6 @@ function renderModKanbanView(tasks) {
   kanban.style.width = '100%';
   kanban.style.gridColumn = '1 / -1';
 
-  // Col 1: Pendientes
   const colPending = document.createElement('div');
   colPending.className = 'kanban-col';
   colPending.innerHTML = `
@@ -825,7 +745,6 @@ function renderModKanbanView(tasks) {
     <div class="kanban-tasks-list" id="kanban-pending-list"></div>
   `;
 
-  // Col 2: Prontas
   const colCompleted = document.createElement('div');
   colCompleted.className = 'kanban-col';
   colCompleted.innerHTML = `
@@ -1024,7 +943,7 @@ function renderUserView() {
   lucide.createIcons({ root: userTasksContainer });
 }
 
-// ==================== HELPERS & FORMATTING ====================
+// ==================== HELPERS ====================
 function escapeHtml(str) {
   if (!str) return '';
   return String(str)
@@ -1046,23 +965,19 @@ function formatDate(dateStr) {
   return dateStr;
 }
 
-// ==================== EVENT LISTENERS ====================
+// ==================== APP INITIALIZATION ====================
 document.addEventListener('DOMContentLoaded', () => {
-  // Check stored session
+  // Initialize Realtime DB / LocalStorage
+  initDatabase();
+
+  // Restore active session if present
   const savedSession = sessionStorage.getItem('eclipse_session_user');
-  
-  loadData().then(() => {
-    if (savedSession) {
-      try {
-        const u = JSON.parse(savedSession);
-        // verify still exists in appUsers
-        const valid = appUsers.find(x => x.username === u.username);
-        if (valid) {
-          authenticateUser(valid);
-        }
-      } catch (e) {}
-    }
-  });
+  if (savedSession) {
+    try {
+      const u = JSON.parse(savedSession);
+      authenticateUser(u);
+    } catch (e) {}
+  }
 
   // Login events
   loginForm.addEventListener('submit', handleLogin);

@@ -1,56 +1,71 @@
 # 🌑 Eclipse Studio APP - Task Workspace (Notion Style)
 
-Una aplicación de gestión de tareas estilo **Notion** con paleta de colores **roja y negra** (Dark & Crimson Red), pensada para equipos y estudios donde los moderadores gestionan y asignan tareas, y los integrantes visualizan únicamente lo que les corresponde.
+Una aplicación de gestión de tareas estilo **Notion** con paleta de colores **roja y negra** (Dark & Crimson Red), sincronizada en la nube con **Firebase Realtime Database** en tiempo real.
 
 ---
 
-## 🚀 Cómo iniciar la aplicación
+## ⚡ Sincronización en la Nube con Firebase
 
-Tienes dos formas súper sencillas de usarla:
+La app se actualiza instantáneamente en todos los dispositivos usando **Firebase Realtime Database**.
 
-### Opción 1: Un solo click (Recomendada)
-- Haz doble clic en el archivo **`iniciar_app.bat`**.
-- Se abrirá automáticamente en tu navegador en `http://localhost:8000`.
+### 🛠️ Pasos para conectar tu base de datos (Gratis en 2 minutos):
 
-### Opción 2: Desde la consola / terminal
-```bash
-python server.py
+1. Ve a **[Firebase Console](https://console.firebase.google.com/)** e inicia sesión con tu cuenta de Google.
+2. Haz clic en **"Crear un proyecto"** (nómbralo `Eclipse Studio` o el nombre que prefieras).
+3. En el menú lateral izquierdo:
+   - Ve a **Compilación > Realtime Database** y haz clic en **"Crear base de datos"**.
+   - Elige la ubicación predeterminada y selecciona **Modo de prueba** (permite lectura y escritura inmediata).
+4. Ve a la **Configuración del proyecto** (icono de engranaje ⚙️ arriba a la izquierda).
+5. En la sección *"Tus apps"*, haz clic en el icono web `</>` para registrar una app web.
+6. Copia el contenido del objeto `firebaseConfig` y pégalo en el archivo **[`firebase-config.js`](./firebase-config.js)**:
+
+```javascript
+const firebaseConfig = {
+  apiKey: "AIzaSy...",
+  authDomain: "tu-proyecto.firebaseapp.com",
+  databaseURL: "https://tu-proyecto-default-rtdb.firebaseio.com",
+  projectId: "tu-proyecto",
+  storageBucket: "tu-proyecto.appspot.com",
+  messagingSenderId: "...",
+  appId: "..."
+};
 ```
-Luego abre en tu navegador: **`http://localhost:8000`**
 
-*(Nota: La app también funciona de forma autónoma abriendo directamente `index.html` en cualquier navegador gracias a su sistema de respaldo con LocalStorage).*
+---
+
+## 🌐 Publicar la App en Internet (GitHub Pages)
+
+Para que cualquier integrante pueda entrar desde su computadora o celular desde cualquier lugar:
+
+1. En tu repositorio de GitHub: **[https://github.com/AlexCAC0/eclipseapp](https://github.com/AlexCAC0/eclipseapp)**
+2. Ve a **Settings (Configuración)** > pestaña **Pages** (en el menú lateral izquierdo).
+3. En **Build and deployment > Branch**, selecciona la rama **`main`** y la carpeta `/(root)`, luego haz clic en **Save**.
+4. ¡Listo! En 1 minuto tendrás tu enlace público oficial:
+   👉 **`https://alexcac0.github.io/eclipseapp/`**
 
 ---
 
 ## 🛠️ Características Principales
 
 ### 🔴 1. Vista de Moderador (Control Total)
-- **Supervisión Global:** Métricas en tiempo real de Tareas Totales, Pendientes, Prontas y Porcentaje de Progreso.
+- **Supervisión en Tiempo Real:** Métricas globales de Tareas Totales, Pendientes, Prontas y Progreso del equipo.
 - **Gestión de Integrantes:**
-  - Crear nuevos usuarios con su nombre, usuario y contraseña.
+  - Crear usuarios con su nombre, usuario y contraseña directamente en la nube.
   - Ver el progreso individual de cada integrante.
-  - Eliminar usuarios (la cuenta de *AlexCAC* está protegida contra borrado accidental).
+  - Eliminar integrantes cuando sea necesario.
 - **Gestión de Tareas (CRUD completo):**
-  - Crear nuevas tareas asignándolas al integrante correspondiente, con categoría (Diseño, Dev, Video, Audio, Redes, General), nivel de prioridad (Alta, Media, Baja), fecha límite e instrucciones detalladas.
-  - Editar y eliminar tareas existentes.
-  - 3 Modos de visualización estilo Notion:
-    - **Cuadrícula de Tarjetas (Cards View)**
-    - **Tablero Kanban (Pendientes vs Prontas)**
-    - **Tabla Notion con filtros y ordenamiento**
-- **Buscador y Filtros:** Filtrar instantáneamente por integrante, estado o prioridad.
-
----
+  - Asignar tareas a cualquier integrante con categoría, prioridad, fecha límite e instrucciones.
+  - 3 Vistas estilo Notion: **Tarjetas (Grid)**, **Tablero Kanban (Pendientes / Prontas)** y **Tabla Notion**.
+  - Filtros y buscador dinámico.
 
 ### ⚫ 2. Vista de Integrante (Espacio Personal Privado)
-- **Foco Absoluto:** El integrante **solo ve las tareas que le fueron asignadas por el moderador**. No tiene acceso a tareas ajenas.
-- **Barra de Progreso Personal:** Visualización de su avance individual.
-- **Marcar Tarea como "Pronta":** Con un solo clic cambia de estado con feedback visual y felicitación.
-- **Ver Detalles:** Popup para leer descripciones extensas, enlaces o notas del moderador.
-- **Filtros rápidos:** Pestañas para ver *Todas*, *Solo Pendientes* o *Solo Prontas*.
+- **Foco Absoluto:** Cada integrante **solo ve sus tareas asignadas**.
+- **Marcar como "Pronta":** Actualización instantánea en la nube que refleja el cambio en la vista del moderador en tiempo real.
+- **Detalle de Tarea:** Modal para leer instrucciones completas.
 
 ---
 
 ## 🎨 Paleta de Diseño
-- **Fondo Principal:** Negro Ónix / Obsidiana (`#09090b`, `#14141a`)
+- **Fondo:** Negro Ónix / Obsidiana (`#09090b`, `#14141a`)
 - **Acentos:** Rojo Carmesí y Rubí Vibrante (`#e50914`, `#ff2a44`)
-- **Estilo:** Minimalismo Notion, bordes limpios, insignias de estado y tipografía moderna *Plus Jakarta Sans*.
+- **Estilo:** Notion minimalista, tarjetas con bordes limpios y tipografía *Plus Jakarta Sans*.
